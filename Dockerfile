@@ -9,7 +9,6 @@ FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/scheduler .
 COPY web ./web
-EXPOSE 7540
 ENV TODO_PORT=7540
 ENV TODO_DBFILE=/data/scheduler.db
 CMD ["./scheduler"]

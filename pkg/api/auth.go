@@ -13,7 +13,14 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = []byte("final-project-secret")
+var (
+	jwtSecret   = []byte("final-project-secret")
+	appPassword string
+)
+
+func init() {
+	appPassword = os.Getenv("TODO_PASSWORD")
+}
 
 func hashPassword(password string) string {
 	h := sha256.New()
@@ -31,38 +38,36 @@ func signinHandler(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
-	expected := os.Getenv("TODO_PASSWORD")
-	if expected == "" {
-		writeJSON(w, map[string]string{"error": "Authentication not configured"})
+	if appPassword == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Authentication not configured"})
 		return
 	}
 
-	if req.Password != expected {
-		writeJSON(w, map[string]string{"error": "Неверный пароль"})
+	if req.Password != appPassword {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Неверный пароль"})
 		return
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"hash": hashPassword(expected),
+		"hash": hashPassword(appPassword),
 		"exp":  time.Now().Add(8 * time.Hour).Unix(),
 	})
 	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
-		writeJSON(w, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
 
-	writeJSON(w, map[string]string{"token": tokenString})
+	writeJSON(w, http.StatusOK, map[string]string{"token": tokenString})
 }
 
 func auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		pass := os.Getenv("TODO_PASSWORD")
-		if len(pass) == 0 {
+		if appPassword == "" {
 			next(w, r)
 			return
 		}
@@ -103,7 +108,7 @@ func auth(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		hash, ok := claims["hash"].(string)
-		if !ok || hash != hashPassword(pass) {
+		if !ok || hash != hashPassword(appPassword) {
 			http.Error(w, "Authentification required", http.StatusUnauthorized)
 			return
 		}
